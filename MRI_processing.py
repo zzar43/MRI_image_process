@@ -4,6 +4,11 @@ This file is to do the skull strip with FreeSurfer.
 Version 2.
 Author: Da Li
 
+Please run the following commands manually before start:
+export FREESURFER_HOME=/usr/local/freesurfer/7.2.0
+source $FREESURFER_HOME/SetUpFreeSurfer.sh
+export SUBJECTS_DIR=/export/home/da.li1/dataset/UNet_IDP/UNet_IDP_Stage_1/FreeSurfer
+
 """
 
 from copy import copy
@@ -17,10 +22,15 @@ import torch
 from torch import nn
 import numpy as np
 
-CPU_NUM = 4
+CPU_NUM = 35
 # set path
 # BASE_PATH = os.getcwd()
-BASE_PATH = "/Users/lida/Local_Document/ADNI_dataset/UNet_IDP_Stage_0"
+
+# Stage 0
+# BASE_PATH = "/export/home/da.li1/dataset/UNet_IDP/UNet_IDP_Stage_0"
+# Stage 1
+BASE_PATH = "/export/home/da.li1/dataset/UNet_IDP/UNet_IDP_Stage_1"
+
 ADNI_PATH = BASE_PATH + "/ADNI"
 FREESURFER_PATH = BASE_PATH + "/FreeSurfer"
 SAVE_PATH = BASE_PATH + "/Dataset"
@@ -29,6 +39,7 @@ MRI_PATH_LIST = glob(ADNI_PATH + '/**/*.nii', recursive=True)
 
 
 print('Number of file: ', len(MRI_PATH_LIST))
+print('CPU number: ', CPU_NUM)
 print(BASE_PATH)
 print(ADNI_PATH)
 print(FREESURFER_PATH)
@@ -36,7 +47,7 @@ print(SAVE_PATH)
 
 def copy_adni_to_freesurfer():
     print("\nCopy ADNI MRI data to FreeSurfer subfolder.")
-    for idx in tqdm(range(len(MRI_PATH_LIST))):
+    for idx in tqdm(range(len(MRI_PATH_LIST)), ncols=80):
         cmd = "cp " + MRI_PATH_LIST[idx] + " " + FREESURFER_PATH
         os.system(cmd)
     print("Copy Done.")
@@ -48,9 +59,9 @@ def skull_remove():
     print("Change path to: ", FREESURFER_PATH)
     cmd1 = "export SUBJECTS_DIR=" + FREESURFER_PATH + ";"
     # for test
-    cmd2 = "ls *.nii | parallel -j" + str(CPU_NUM) + "recon-all -s {.} -i {} > log.txt"
+    # cmd2 = "ls *.nii | parallel -j " + str(CPU_NUM) + " recon-all -s {.} -i {} > log.txt"
     # for skull remove
-    # cmd2 = "ls *.nii | parallel -j " + str(CPU_NUM) + " recon-all -s {.} -i {} -autorecon1 > log_skull_remove.txt"
+    cmd2 = "ls *.nii | parallel -j " + str(CPU_NUM) + " recon-all -s {.} -i {} -autorecon1 > log_skull_remove.txt"
     print("Start remove skull... Wait for hours...")
     os.system(cmd1 + cmd2)
     os.chdir(BASE_PATH)
@@ -74,7 +85,7 @@ def convert_mri():
     print("Change path to: ", BASE_PATH, "\nDone.")
 
 def convert_to_tensor():
-    print("\nConvert MRI from *.nii to PyTorch tensor")
+    print("\nConvert MRI from *.nii to *.npz, filename is saved as img.")
     brainmask_path = glob(FREESURFER_PATH + '/**/brainmask.nii', recursive=True)
 
     for idx in tqdm(range(len(brainmask_path))):
@@ -92,14 +103,15 @@ def convert_to_tensor():
         img = torch.tensor(img, dtype=torch.float32)
         img = img[None,:,:,:]
 
-        # save MRI image
-        torch.save(img, savepath)
+        # save MRI image, use numpy np.savez_compressed
+        # torch.save(img, savepath)
+        np.savez_compressed(savepath, img=img)
     print("Convert Done.")
 
 def main():
 
     # step 1: copy ADNI MRI data to a FreeSurfer working folder
-    copy_adni_to_freesurfer()
+    # copy_adni_to_freesurfer()
 
     # step 2: in the FreeSurfer working folder, skull stripping, save as *.mgz file
     skull_remove()
@@ -109,6 +121,9 @@ def main():
 
     # step 4: convert the *.nii file to PyTorch tensor
     convert_to_tensor()
+
+    print("All done!")
+
 
 if __name__ == "__main__":
     main()
